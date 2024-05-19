@@ -19,7 +19,11 @@ class ServerlessStack(TerraformStack):
 
         account_id = DataAwsCallerIdentity(self, "acount_id").account_id
         
-        bucket = S3Bucket()
+        bucket = S3Bucket(self, "s3_bucket",
+            bucket_prefix = "my-cdtf-bucket",
+            acl="private",
+            force_destroy=True
+            )
 
         S3BucketCorsConfiguration(
             self, "cors",
@@ -31,11 +35,35 @@ class ServerlessStack(TerraformStack):
             )]
             )
 
-        dynamo_table = DynamodbTable()
+        dynamo_table = DynamodbTable(self, "DynamodDB-table",
+            name= "postagram-dynamo",
+            hash_key="user",
+            range_key="id",
+            attribute=[
+            DynamodbTableAttribute(name="user",type="S" ),
+            DynamodbTableAttribute(name="id",type="S" )
+            ],
+            billing_mode="PROVISIONED",
+            read_capacity=5,
+            write_capacity=5)
 
-        code = TerraformAsset()
+        code = TerraformAsset(
+            self, "code",
+            path = "./lambda",
+            type = AssetType.ARCHIVE
+        )
 
-        lambda_function = LambdaFunction()
+        lambda_function = LambdaFunction(
+            self, "lambda",
+            function_name = "postagram_lambda",
+            runtime = "python3.12",
+            memory_size = 128,
+            timeout = 60,
+            role = f"arn:aws:iam::{account_id}:role/LabRole",
+            filename = code.path,
+            handler = "lambda_function.lambda_handler",
+            environment = {"variables" : {"dynamo_id" : dynamo_table.id}}
+        )
 
         permission = LambdaPermission(
             self, "lambda_permission",
@@ -58,7 +86,15 @@ class ServerlessStack(TerraformStack):
             depends_on=[permission]
         )
 
+        TerraformOutput(
+            self, "s3_bucket_name",
+            value = bucket.id
+        )
 
+        TerraformOutput(
+            self, "dynamodb_name",
+            value = dynamo_table.id
+        )
 
 app = App()
 ServerlessStack(app, "cdktf_serverless")

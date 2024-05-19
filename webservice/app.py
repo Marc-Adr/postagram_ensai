@@ -1,5 +1,6 @@
 import boto3
 from botocore.config import Config
+from boto3.dynamodb.conditions import Key
 import os
 from dotenv import load_dotenv
 from typing import Union
@@ -10,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+import uuid
 
 from getSignedUrl import getSignedUrl
 
@@ -58,13 +60,32 @@ async def post_a_post(post: Post, authorization: str | None = Header(default=Non
     logger.info(f"user : {authorization}")
 
     # Doit retourner le résultat de la requête la table dynamodb
-    return []
+
+    posts = table.put_item(
+         Item = {
+              "user" : f"USER#{authorization}",
+              "id" : f"POST#{uuid.uuid4()}",
+              "title" : post.title,
+              "body" : post.body
+         }
+    )
+         
+    return posts
 
 @app.get("/posts")
 async def get_all_posts(user: Union[str, None] = None):
 
     # Doit retourner une liste de post
-    return []
+    
+    if user :
+         response = table.query(
+              KeyConditionExpression = Key("user").eq("USER#" + user)
+         )
+
+    else :
+         response = table.scan()
+
+    return response["Items"]
 
     
 @app.delete("/posts/{post_id}")

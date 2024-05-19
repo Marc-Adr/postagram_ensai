@@ -1,0 +1,1 @@
+Lors du cdktf dploy de "main_serverless.py", récupérer les noms du bucket s3 et de la dynamodb et remplir les parties de "main_server.py" et de .env demandant ces informations

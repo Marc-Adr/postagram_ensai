@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from constructs import Construct
-from cdktf import App, TerraformStack
+from cdktf import App, TerraformStack, TerraformOutput
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.default_vpc import DefaultVpc
 from cdktf_cdktf_provider_aws.default_subnet import DefaultSubnet
@@ -91,15 +91,53 @@ class ServerStack(TerraformStack):
             ]
             )
         
-        launch_template = LaunchTemplate()
+        launch_template = LaunchTemplate(
+            self, "launch_template",
+            image_id = "ami-04b70fa74e45c3917",
+            instance_type = "t2.micro",
+            user_data = user_data,
+            vpc_security_group_ids = [security_group.id],
+            key_name = "vockey",
+            iam_instance_profile = {"name" : "LabInstanceProfile"}
+        )
         
-        lb = Lb()
+        lb = Lb(
+             self, "lb",
+             load_balancer_type = "application",
+             security_groups = [security_group.id],
+             subnets = subnets
+        )
 
-        target_group=LbTargetGroup()
+        target_group=LbTargetGroup(
+             self, "tg_group",
+             port = 8080,
+             protocal = "HTTP",
+             target_type = "instance",
+             vpc_id = default_vpc.id
+        )
 
-        lb_listener = LbListener()
+        lb_listener = LbListener(
+             self, "lb_listener",
+             default_action = [LbListenerDefaultAction(type = "forward", target_group_arn = target_group.arn)],
+             port = 80,
+             load_balancer_arn = lb.arn,
+             protocol = "HTTP"
+        )
 
-        asg = AutoscalingGroup()
+        asg = AutoscalingGroup(
+            self, "asg",
+            min_size = 1,
+            max_size = 4,
+            desired_capacity = 1,
+            launch_template = {"id":launch_template.id},
+            vpc_zone_identifier = subnets,
+            target_group_arns = [target_group.arn]
+        )
+
+        TerraformOutput(
+            self, "load_balancer_dnc_name",
+            value = f"http://{lb.dns_name}",
+        )
 
 
 app = App()
